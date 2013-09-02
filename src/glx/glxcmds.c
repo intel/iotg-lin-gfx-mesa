@@ -1628,7 +1628,31 @@ _X_EXPORT GLXContext
 glXCreateNewContext(Display * dpy, GLXFBConfig fbconfig,
                     int renderType, GLXContext shareList, Bool allowDirect)
 {
+   int list_size;
    struct glx_config *config = (struct glx_config *) fbconfig;
+
+   if (!config)
+   {
+       return NULL;
+   }
+
+   int screen = XDefaultScreen(dpy);
+   struct glx_config **config_list = (struct glx_config **)
+      glXGetFBConfigs(dpy, screen, &list_size);
+
+   int i;
+   for (i = 0; i < list_size; i++)
+   {
+       if (config_list[i] == config)
+       {
+           break;
+       }
+   }
+   
+   if (i == list_size)
+   {
+       return NULL;
+   }
 
    return CreateContext(dpy, config->fbconfigID, config, shareList,
 			allowDirect, X_GLXCreateNewContext, renderType,
