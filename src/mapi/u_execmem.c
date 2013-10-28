@@ -37,7 +37,7 @@
 #include "u_execmem.h"
 
 
-#define EXEC_MAP_SIZE (4*1024)
+#define EXEC_MAP_SIZE (8*1024)
 
 static mtx_t exec_mutex = _MTX_INITIALIZER_NP;
 
