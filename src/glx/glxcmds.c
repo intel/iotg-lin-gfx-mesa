@@ -1727,7 +1727,7 @@ __glXSwapIntervalSGI(int interval)
    CARD32 *interval_ptr;
    CARD8 opcode;
 
-   if (gc == NULL) {
+   if (gc == NULL || gc == &dummyContext) {
       return GLX_BAD_CONTEXT;
    }
 
