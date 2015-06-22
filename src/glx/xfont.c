@@ -235,7 +235,7 @@ DRI_glXUseXFont(struct glx_context *CC, Font font, int first, int count, int lis
    int i;
 
    dpy = CC->currentDpy;
-   win = CC->currentDrawable;
+   win = DefaultRootWindow(dpy);
 
 #if !defined(GLX_USE_APPLEGL)
    glxdraw = GetGLXDRIDrawable(CC->currentDpy, CC->currentDrawable);
