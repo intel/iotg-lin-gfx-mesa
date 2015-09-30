@@ -1648,7 +1648,8 @@ glXCreateNewContext(Display * dpy, GLXFBConfig fbconfig,
            break;
        }
    }
-   
+   free(config_list);
+
    if (i == list_size)
    {
        return NULL;
