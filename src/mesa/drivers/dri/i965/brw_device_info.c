@@ -334,6 +334,47 @@ static const struct brw_device_info brw_device_info_skl_gt3 = {
    .supports_simd16_3src = true,
 };
 
+static const struct brw_device_info brw_device_info_bxtfast = {
+   GEN9_FEATURES,
+   .is_broxton = 1,
+   .gt = 1,
+   .has_llc = false,
+   .max_vs_threads = 112, /*56,*/
+   .max_hs_threads = 56,
+   .max_ds_threads = 56,
+   .max_gs_threads = 112, /*56,*/
+   .max_wm_threads = 32,
+   .max_cs_threads = 28,
+   .urb = {
+      .size = 64,
+      .min_vs_entries = 34,
+      .max_vs_entries = 640,
+      .max_hs_entries = 80,
+      .max_ds_entries = 80,
+      .max_gs_entries = 256,
+   }
+};
+static const struct brw_device_info brw_device_info_bxt = {
+   GEN9_FEATURES,
+   .is_broxton = 1,
+   .gt = 1,
+   .has_llc = false,
+   .max_vs_threads = /*112,*/56,
+   .max_hs_threads = 56,
+   .max_ds_threads = 56,
+   .max_gs_threads = /*112,*/56,
+   .max_wm_threads = 32,
+   .max_cs_threads = 28,
+   .urb = {
+      .size = 64,
+      .min_vs_entries = 34,
+      .max_vs_entries = 640,
+      .max_hs_entries = 80,
+      .max_ds_entries = 80,
+      .max_gs_entries = 256,
+   }
+};
+
 const struct brw_device_info *
 brw_get_device_info(int devid, int revision)
 {
@@ -348,7 +389,14 @@ brw_get_device_info(int devid, int revision)
       return NULL;
    }
 
-   if (devinfo->gen == 9 && (revision == 2 || revision == 3 || revision == -1))
+   if(devinfo->is_broxton){
+      if (getenv("MESA_965_BXT_FAST")) {
+         fprintf(stderr, "Detected user request for more EU threads for Broxton.\n");
+         return &brw_device_info_bxtfast;
+      }
+   }
+
+   if (devinfo->gen == 9 && !devinfo->is_broxton && (revision == 2 || revision == 3 || revision == -1))
       return &brw_device_info_skl_early;
 
    return devinfo;
