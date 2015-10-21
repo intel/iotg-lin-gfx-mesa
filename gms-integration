@@ -1,0 +1,9 @@
+###
+### GMS integration
+###
+upstream 8957b696f9cc8a92b2c160c551c34545447ec28a
+	docs: add sha256 checksums for 10.6.9
+topic/bxt-enablement 9daadc1ec277150c7497a6503e1788248ed4dad2
+	i965/bxt: Add environment override for thread count
+topic/vpg_ufo_patches f9fb1c0c6ac957b8f4ab07d434be50788f8644f6
+	glx: Don't leak FBConfig list during context creation
