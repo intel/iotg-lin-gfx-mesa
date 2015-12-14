@@ -45,6 +45,10 @@
 #include "eglsurface.h"
 
 
+#define EGL_MAX_PBUFFER_HEIGHT_SIZE (4096)
+#define EGL_MAX_PBUFFER_WIDTH_SIZE  (4096)
+
+
 static void
 _eglClampSwapInterval(_EGLSurface *surf, EGLint interval)
 {
@@ -289,6 +293,12 @@ _eglInitSurface(_EGLSurface *surf, _EGLDisplay *dpy, EGLint type,
    err = _eglParseSurfaceAttribList(surf, attrib_list);
    if (err != EGL_SUCCESS)
       return _eglError(err, func);
+
+   if (surf->LargestPbuffer != EGL_FALSE)
+   {
+      surf->Width = EGL_MAX_PBUFFER_HEIGHT_SIZE;
+      surf->Height = EGL_MAX_PBUFFER_WIDTH_SIZE;
+   }
 
    return EGL_TRUE;
 }
