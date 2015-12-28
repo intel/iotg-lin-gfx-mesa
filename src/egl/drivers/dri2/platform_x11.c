@@ -235,6 +235,16 @@ dri2_x11_create_surface(_EGLDriver *drv, _EGLDisplay *disp, EGLint type,
          goto cleanup_surf;
       }
 
+      /*
+       * WA for EGL to avoid attempts to create surface with 0 width or height.
+       * Mainly for eglCreatePbufferSurface, which creation with 0 width or
+       * height causes XServer unstable.
+       */
+      if (dri2_surf->base.Width == 0)
+          dri2_surf->base.Width = 1;
+      if (dri2_surf->base.Height == 0)
+          dri2_surf->base.Height = 1;
+
       dri2_surf->drawable = xcb_generate_id(dri2_dpy->conn);
       xcb_create_pixmap(dri2_dpy->conn, conf->BufferSize,
                        dri2_surf->drawable, screen->root,
