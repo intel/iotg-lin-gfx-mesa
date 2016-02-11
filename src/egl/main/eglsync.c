@@ -144,9 +144,6 @@ EGLBoolean
 _eglGetSyncAttrib(_EGLDriver *drv, _EGLDisplay *dpy, _EGLSync *sync,
                   EGLint attribute, EGLAttrib *value)
 {
-   if (!value)
-      return _eglError(EGL_BAD_PARAMETER, "eglGetSyncAttribKHR");
-
    switch (attribute) {
    case EGL_SYNC_TYPE_KHR:
       *value = sync->Type;
@@ -155,7 +152,8 @@ _eglGetSyncAttrib(_EGLDriver *drv, _EGLDisplay *dpy, _EGLSync *sync,
       /* update the sync status */
       if (sync->SyncStatus != EGL_SIGNALED_KHR &&
           (sync->Type == EGL_SYNC_FENCE_KHR ||
-           sync->Type == EGL_SYNC_CL_EVENT_KHR))
+           sync->Type == EGL_SYNC_CL_EVENT_KHR ||
+	   sync->Type == EGL_SYNC_REUSABLE_KHR))
          drv->API.ClientWaitSyncKHR(drv, dpy, sync, 0, 0);
 
       *value = sync->SyncStatus;

@@ -38,6 +38,8 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <unistd.h>
+#include <pthread.h>
+#include <time.h>
 #ifdef HAVE_LIBDRM
 #include <xf86drm.h>
 #include <drm_fourcc.h>
@@ -622,6 +624,8 @@ dri2_setup_screen(_EGLDisplay *disp)
       if (dri2_dpy->fence->get_fence_from_cl_event)
          disp->Extensions.KHR_cl_event2 = EGL_TRUE;
    }
+
+   disp->Extensions.KHR_reusable_sync = EGL_TRUE;
 
    if (dri2_dpy->image) {
       if (dri2_dpy->image->base.version >= 10 &&
@@ -2394,7 +2398,18 @@ dri2_egl_unref_sync(struct dri2_egl_display *dri2_dpy,
                     struct dri2_egl_sync *dri2_sync)
 {
    if (p_atomic_dec_zero(&dri2_sync->refcount)) {
-      dri2_dpy->fence->destroy_fence(dri2_dpy->dri_screen, dri2_sync->fence);
+      /* mutex and cond should be freed if not freed yet. */
+      if (dri2_sync->mutex)
+         free(dri2_sync->mutex);
+
+      if (dri2_sync->cond) {
+         pthread_cond_destroy(dri2_sync->cond);
+         free(dri2_sync->cond);
+      }
+
+      if (dri2_sync->fence)
+         dri2_dpy->fence->destroy_fence(dri2_dpy->dri_screen, dri2_sync->fence);
+
       free(dri2_sync);
    }
 }
@@ -2450,6 +2465,14 @@ dri2_create_sync(_EGLDriver *drv, _EGLDisplay *dpy,
                                             dri2_sync->fence, 0, 0))
          dri2_sync->base.SyncStatus = EGL_SIGNALED_KHR;
       break;
+
+   case EGL_SYNC_REUSABLE_KHR:
+      dri2_sync->cond = calloc(1, sizeof(pthread_cond_t));
+      dri2_sync->mutex = calloc(1, sizeof(pthread_mutex_t));
+      pthread_cond_init(dri2_sync->cond, NULL);
+      /* initial status of reusable sync must be "unsignaled" */
+      dri2_sync->base.SyncStatus = EGL_UNSIGNALED_KHR;
+      break;
    }
 
    p_atomic_set(&dri2_sync->refcount, 1);
@@ -2462,6 +2485,17 @@ dri2_destroy_sync(_EGLDriver *drv, _EGLDisplay *dpy, _EGLSync *sync)
    struct dri2_egl_display *dri2_dpy = dri2_egl_display(dpy);
    struct dri2_egl_sync *dri2_sync = dri2_egl_sync(sync);
 
+   /* if type of sync is EGL_SYNC_REUSABLE_KHR and it is not signaled yet,
+    * then unlock all threads possibly blocked by this reusable sync before
+    * destroy it.
+    */
+   if (dri2_sync->base.Type == EGL_SYNC_REUSABLE_KHR &&
+       dri2_sync->base.SyncStatus == EGL_UNSIGNALED_KHR) {
+      dri2_sync->base.SyncStatus = EGL_SIGNALED_KHR;
+      /* unblock all threads currently blocked by sync */
+      pthread_cond_broadcast(dri2_sync->cond);
+   }
+
    dri2_egl_unref_sync(dri2_dpy, dri2_sync);
    return EGL_TRUE;
 }
@@ -2471,10 +2505,16 @@ dri2_client_wait_sync(_EGLDriver *drv, _EGLDisplay *dpy, _EGLSync *sync,
                       EGLint flags, EGLTime timeout)
 {
    _EGLContext *ctx = _eglGetCurrentContext();
+   struct dri2_egl_driver *dri2_drv = dri2_egl_driver(drv);
    struct dri2_egl_display *dri2_dpy = dri2_egl_display(dpy);
    struct dri2_egl_context *dri2_ctx = dri2_egl_context(ctx);
    struct dri2_egl_sync *dri2_sync = dri2_egl_sync(sync);
    unsigned wait_flags = 0;
+
+   /* needed for EGL_SYNC_REUSABLE_KHR */
+   struct timespec current;
+   struct timespec expiration;
+
    EGLint ret = EGL_CONDITION_SATISFIED_KHR;
 
    /* The EGL_KHR_fence_sync spec states:
@@ -2488,15 +2528,82 @@ dri2_client_wait_sync(_EGLDriver *drv, _EGLDisplay *dpy, _EGLSync *sync,
    /* the sync object should take a reference while waiting */
    dri2_egl_ref_sync(dri2_sync);
 
-   if (dri2_dpy->fence->client_wait_sync(dri2_ctx ? dri2_ctx->dri_context : NULL,
+   switch (sync->Type) {
+   case EGL_SYNC_FENCE_KHR:
+      if (dri2_dpy->fence->client_wait_sync(dri2_ctx ? dri2_ctx->dri_context : NULL,
                                          dri2_sync->fence, wait_flags,
                                          timeout))
-      dri2_sync->base.SyncStatus = EGL_SIGNALED_KHR;
-   else
-      ret = EGL_TIMEOUT_EXPIRED_KHR;
+         dri2_sync->base.SyncStatus = EGL_SIGNALED_KHR;
+      else
+         ret = EGL_TIMEOUT_EXPIRED_KHR;
+
+      break;
+
+   case EGL_SYNC_REUSABLE_KHR:
+      if (flags != 0 && flags != EGL_SYNC_FLUSH_COMMANDS_BIT_KHR) {
+         _eglError(EGL_BAD_PARAMETER, "dri2_client_wait_sync");
+         return EGL_FALSE;
+      }
+
+      if (dri2_ctx && dri2_sync->base.SyncStatus==EGL_UNSIGNALED_KHR &&
+          (flags & EGL_SYNC_FLUSH_COMMANDS_BIT_KHR)) {
+         /* flush context if EGL_SYNC_FLUSH_COMMANDS_BIT_KHR is set */
+         if (dri2_drv->glFlush)
+            dri2_drv->glFlush();
+      }
+
+      /* if timeout is EGL_FOREVER_KHR, it should wait without any timeout.*/
+      if (timeout == EGL_FOREVER_KHR) {
+         pthread_mutex_lock(dri2_sync->mutex);
+         ret = pthread_cond_wait(dri2_sync->cond, dri2_sync->mutex);
+         pthread_mutex_unlock(dri2_sync->mutex);
+      } else {
+         /* if it's not yet signaled */
+         if (dri2_sync->base.SyncStatus!=EGL_SIGNALED_KHR) {
+
+            clock_gettime(CLOCK_REALTIME, &current);
+
+            expiration.tv_nsec = current.tv_nsec + timeout;
+            expiration.tv_sec = current.tv_sec + expiration.tv_nsec/1000000000L;
+            expiration.tv_nsec = current.tv_nsec%1000000000L;
+
+            pthread_mutex_lock(dri2_sync->mutex);
+            ret = pthread_cond_timedwait(dri2_sync->cond, dri2_sync->mutex, &expiration);
+            pthread_mutex_unlock(dri2_sync->mutex);
+
+            if (ret==ETIMEDOUT && dri2_sync->base.SyncStatus==EGL_UNSIGNALED_KHR)
+               ret = EGL_TIMEOUT_EXPIRED_KHR;
+         }
+      }
+      break;
+   }
 
    dri2_egl_unref_sync(dri2_dpy, dri2_sync);
    return ret;
+}
+
+static EGLBoolean
+dri2_signal_sync(_EGLDriver *drv, _EGLDisplay *dpy, _EGLSync *sync,
+                      EGLenum mode)
+{
+   struct dri2_egl_sync *dri2_sync = dri2_egl_sync(sync);
+
+   if (sync->Type!=EGL_SYNC_REUSABLE_KHR) {
+      _eglError(EGL_BAD_MATCH, "dri2_signal_sync");
+      return EGL_FALSE;
+   }
+
+   if (mode != EGL_SIGNALED_KHR && mode != EGL_UNSIGNALED_KHR) {
+      _eglError(EGL_BAD_ATTRIBUTE, "dri2_signal_sync");
+      return EGL_FALSE;
+   }
+
+   dri2_sync->base.SyncStatus = mode;
+
+   if (mode == EGL_SIGNALED_KHR)
+     pthread_cond_broadcast(dri2_sync->cond);
+
+   return EGL_TRUE;
 }
 
 static EGLint
@@ -2620,6 +2727,7 @@ _eglBuiltInDriverDRI2(const char *args)
    dri2_drv->base.API.GetSyncValuesCHROMIUM = dri2_get_sync_values_chromium;
    dri2_drv->base.API.CreateSyncKHR = dri2_create_sync;
    dri2_drv->base.API.ClientWaitSyncKHR = dri2_client_wait_sync;
+   dri2_drv->base.API.SignalSyncKHR = dri2_signal_sync;
    dri2_drv->base.API.WaitSyncKHR = dri2_server_wait_sync;
    dri2_drv->base.API.DestroySyncKHR = dri2_destroy_sync;
 
