@@ -1,0 +1,11 @@
+###
+### GMS integration
+###
+upstream e49dd21bcbabdb330620d48f5915828cfd5eb983
+	docs: add sha256 checksums for 11.1.2
+topic/vpg_ufo_patches 70a27a7f9cd0c6cbcf07f1c5533468927b3b2c7d
+	Fix for eglCreatePbufferSurface causing BadValue in x11.
+topic/reusable_sync 663ac7b8db043fed826bbe0a48c8e25bfd32f950
+	egl: EGL_KHR_reusable_sync implementation (v5)
+topic/xcompile 8dfe2ddbcfdef0d5a7a1dd11a4b8b641e7c9c01d
+	configure.ac: enable_asm=yes when x-compiling across same arch (v2)
