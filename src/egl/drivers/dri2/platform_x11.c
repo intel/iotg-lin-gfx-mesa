@@ -885,6 +885,25 @@ dri2_x11_swap_buffers(_EGLDriver *drv, _EGLDisplay *disp, _EGLSurface *draw)
    struct dri2_egl_display *dri2_dpy = dri2_egl_display(disp);
    struct dri2_egl_surface *dri2_surf = dri2_egl_surface(draw);
 
+   /*
+    * Updating surface width and height fields for querying size by
+    * eglQuerySurface with EGL_WIDTH, EGL_HEIGHT It's needed for window surface
+    * when window is resized.
+    */
+   if (!(draw->Type & EGL_PBUFFER_BIT)) {
+      xcb_generic_error_t *error = NULL;
+      xcb_get_geometry_cookie_t cookie = xcb_get_geometry (dri2_dpy->conn, dri2_surf->drawable);
+      xcb_get_geometry_reply_t *reply = xcb_get_geometry_reply (dri2_dpy->conn, cookie, &error);
+      if (reply != NULL)
+      {
+         dri2_surf->base.Width = reply->width;
+         dri2_surf->base.Height = reply->height;
+         free(reply);
+      }
+      if (error != NULL)
+        free(error);
+   }
+
    if (dri2_dpy->dri2) {
       if (dri2_x11_swap_buffers_msc(drv, disp, draw, 0, 0, 0) != -1) {
           return EGL_TRUE;
