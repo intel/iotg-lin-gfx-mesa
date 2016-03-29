@@ -1268,6 +1268,10 @@ dri2_make_current(_EGLDriver *drv, _EGLDisplay *disp, _EGLSurface *dsurf,
    if (!dri2_dpy)
       return _eglError(EGL_NOT_INITIALIZED, "eglMakeCurrent");
 
+   /* check display */
+   if (!dri2_dpy)
+      return _eglError(EGL_BAD_DISPLAY, "eglMakeCurrent");
+
    /* make new bindings */
    if (!_eglBindContext(ctx, dsurf, rsurf, &old_ctx, &old_dsurf, &old_rsurf)) {
       /* _eglBindContext already sets the EGL error (in _eglCheckMakeCurrent) */
