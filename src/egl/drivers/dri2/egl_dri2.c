@@ -2513,9 +2513,9 @@ dri2_destroy_sync(_EGLDriver *drv, _EGLDisplay *dpy, _EGLSync *sync)
        dri2_sync->base.SyncStatus == EGL_UNSIGNALED_KHR) {
       dri2_sync->base.SyncStatus = EGL_SIGNALED_KHR;
       /* unblock all threads currently blocked by sync */
-      ret = pthread_cond_broadcast(dri2_sync->cond);
+      err = pthread_cond_broadcast(dri2_sync->cond);
 
-      if (ret) {
+      if (err) {
          _eglError(EGL_BAD_PARAMETER, "eglDestroySyncKHR");
          ret = EGL_FALSE;
       }
