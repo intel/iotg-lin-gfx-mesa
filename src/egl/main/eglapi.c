@@ -101,6 +101,63 @@
 #include "eglimage.h"
 #include "eglsync.h"
 
+/**
+ * List item containing window related to surface
+ */
+typedef struct
+{
+    struct window_list_item *next;
+    EGLNativeWindowType native_window;
+    EGLSurface attached_surface;
+} window_list_item;
+
+window_list_item *window_surface_association_list = NULL;
+
+/*
+ * Checks if a EGLWindow already have a created surface.
+ */
+static inline bool
+is_window_associated_with_surface(EGLNativeWindowType window)
+{
+   window_list_item *it = window_surface_association_list;
+   for (; it != NULL; it = (window_list_item*)it->next) {
+       if (it->native_window == window)
+          return true;
+   }
+
+   return false;
+}
+
+static inline void
+associate_window_with_surface_list(EGLNativeWindowType window, EGLSurface surface)
+{
+   window_list_item *attach = calloc(1, sizeof(window_list_item));
+   assert(attach);
+
+   attach->next = (struct window_list_item*)window_surface_association_list;
+   attach->native_window = window;
+   attach->attached_surface = surface;
+
+   window_surface_association_list = attach;
+}
+
+static inline void
+disassociate_window_with_surface_list(EGLSurface surface)
+{
+   window_list_item *it = window_surface_association_list, *last = NULL;
+   for (; it != NULL; it = (window_list_item*)it->next) {
+      if (it->attached_surface == surface) {
+         if (it == window_surface_association_list) {
+            window_surface_association_list = (window_list_item*)it->next;
+         } else {
+            last->next = it->next;
+         }
+         free(it);
+         return;
+      }
+      last = it;
+   }
+}
 
 /**
  * Macros to help return an API entrypoint.
@@ -749,9 +806,19 @@ eglCreateWindowSurface(EGLDisplay dpy, EGLConfig config,
                        EGLNativeWindowType window, const EGLint *attrib_list)
 {
    _EGLDisplay *disp = _eglLockDisplay(dpy);
+   EGLSurface window_surface = NULL;
    STATIC_ASSERT(sizeof(void*) == sizeof(window));
-   return _eglCreateWindowSurfaceCommon(disp, config, (void*) window,
-                                        attrib_list);
+
+   if (is_window_associated_with_surface(window))
+      RETURN_EGL_ERROR(disp, EGL_BAD_ALLOC, EGL_NO_SURFACE);
+
+   window_surface = _eglCreateWindowSurfaceCommon(disp, config, (void*)window,
+                                                  attrib_list);
+
+   if (window_surface)
+       associate_window_with_surface_list(window, window_surface);
+
+   return window_surface;
 }
 
 
@@ -899,6 +966,8 @@ eglDestroySurface(EGLDisplay dpy, EGLSurface surface)
    _EGL_CHECK_SURFACE(disp, surf, EGL_FALSE, drv);
    _eglUnlinkSurface(surf);
    ret = drv->API.DestroySurface(drv, disp, surf);
+
+   disassociate_window_with_surface_list(surface);
 
    RETURN_EGL_EVAL(disp, ret);
 }
