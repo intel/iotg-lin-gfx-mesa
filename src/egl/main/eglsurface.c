@@ -235,6 +235,19 @@ _eglParseSurfaceAttribList(_EGLSurface *surf, const EGLint *attrib_list)
       }
    }
 
+   /*
+    * If the surface is Pbuffer type and texture format or target is an
+    * EGL_NO_TEXTURE then both of them should be EGL_NO_TEXTURE.
+    * Otherwise EGL_BAD_MATCH should be returned.
+    */
+   if (((surf->TextureFormat == EGL_NO_TEXTURE &&
+       surf->TextureTarget != EGL_NO_TEXTURE) ||
+       (surf->TextureFormat != EGL_NO_TEXTURE &&
+       surf->TextureTarget == EGL_NO_TEXTURE)) &&
+       (surf->Type & EGL_PBUFFER_BIT)) {
+      err = EGL_BAD_MATCH;
+   }
+
    return err;
 }
 
