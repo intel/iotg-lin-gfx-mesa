@@ -37,11 +37,16 @@ dri2_fallback_create_pixmap_surface(_EGLDriver *drv, _EGLDisplay *disp,
    return NULL;
 }
 
+/*
+ * If config doesn't support pbuffer, there is a need to set egl error.
+ * EGL1.4 spec #3.5.2 - EGL_BAD_MATCH
+ */
 static inline _EGLSurface *
 dri2_fallback_create_pbuffer_surface(_EGLDriver *drv, _EGLDisplay *disp,
                                      _EGLConfig *conf,
                                      const EGLint *attrib_list)
 {
+   _eglError(EGL_BAD_MATCH, "dri2_fallback_create_pbuffer_surface");
    return NULL;
 }
 
