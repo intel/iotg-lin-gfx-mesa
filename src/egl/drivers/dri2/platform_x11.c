@@ -235,6 +235,16 @@ dri2_x11_create_surface(_EGLDriver *drv, _EGLDisplay *disp, EGLint type,
          goto cleanup_surf;
       }
 
+      /*
+       * WA for EGL to avoid attempts to create surface with 0 width or height.
+       * Mainly for eglCreatePbufferSurface, which creation with 0 width or
+       * height causes XServer unstable.
+       */
+      if (dri2_surf->base.Width == 0)
+          dri2_surf->base.Width = 1;
+      if (dri2_surf->base.Height == 0)
+          dri2_surf->base.Height = 1;
+
       dri2_surf->drawable = xcb_generate_id(dri2_dpy->conn);
       xcb_create_pixmap(dri2_dpy->conn, conf->BufferSize,
                        dri2_surf->drawable, screen->root,
@@ -392,7 +402,11 @@ dri2_x11_destroy_surface(_EGLDriver *drv, _EGLDisplay *disp, _EGLSurface *surf)
    (*dri2_dpy->core->destroyDrawable)(dri2_surf->dri_drawable);
    
    if (dri2_dpy->dri2) {
-      xcb_dri2_destroy_drawable (dri2_dpy->conn, dri2_surf->drawable);
+       xcb_void_cookie_t cookie = xcb_dri2_destroy_drawable_checked(dri2_dpy->conn, dri2_surf->drawable);
+       xcb_generic_error_t* error = xcb_request_check(dri2_dpy->conn, cookie);
+       /* Possible adding error handling here. Currently errors are checked here (but ignored) to prevent process termination
+        if native window was already destroyed. */
+       free(error);
    } else {
       assert(dri2_dpy->swrast);
       swrastDestroyDrawable(dri2_dpy, dri2_surf);
@@ -870,6 +884,25 @@ dri2_x11_swap_buffers(_EGLDriver *drv, _EGLDisplay *disp, _EGLSurface *draw)
 {
    struct dri2_egl_display *dri2_dpy = dri2_egl_display(disp);
    struct dri2_egl_surface *dri2_surf = dri2_egl_surface(draw);
+
+   /*
+    * Updating surface width and height fields for querying size by
+    * eglQuerySurface with EGL_WIDTH, EGL_HEIGHT It's needed for window surface
+    * when window is resized.
+    */
+   if (!(draw->Type & EGL_PBUFFER_BIT)) {
+      xcb_generic_error_t *error = NULL;
+      xcb_get_geometry_cookie_t cookie = xcb_get_geometry (dri2_dpy->conn, dri2_surf->drawable);
+      xcb_get_geometry_reply_t *reply = xcb_get_geometry_reply (dri2_dpy->conn, cookie, &error);
+      if (reply != NULL)
+      {
+         dri2_surf->base.Width = reply->width;
+         dri2_surf->base.Height = reply->height;
+         free(reply);
+      }
+      if (error != NULL)
+        free(error);
+   }
 
    if (dri2_dpy->dri2) {
       if (dri2_x11_swap_buffers_msc(drv, disp, draw, 0, 0, 0) != -1) {

@@ -224,15 +224,6 @@ dri2_add_config(_EGLDisplay *disp, const __DRIconfig *dri_config, int id,
          dri_masks[3] = value;
          break;
 
-      case __DRI_ATTRIB_ACCUM_RED_SIZE:
-      case __DRI_ATTRIB_ACCUM_GREEN_SIZE:
-      case __DRI_ATTRIB_ACCUM_BLUE_SIZE:
-      case __DRI_ATTRIB_ACCUM_ALPHA_SIZE:
-         /* Don't expose visuals with the accumulation buffer. */
-         if (value > 0)
-            return NULL;
-         break;
-
       case __DRI_ATTRIB_FRAMEBUFFER_SRGB_CAPABLE:
          srgb = value != 0;
          if (!disp->Extensions.KHR_gl_colorspace && srgb)
@@ -1181,6 +1172,10 @@ dri2_make_current(_EGLDriver *drv, _EGLDisplay *disp, _EGLSurface *dsurf,
    _EGLSurface *tmp_dsurf, *tmp_rsurf;
    __DRIdrawable *ddraw, *rdraw;
    __DRIcontext *cctx;
+
+   /* check display */
+   if (!dri2_dpy)
+      return _eglError(EGL_BAD_DISPLAY, "eglMakeCurrent");
 
    /* make new bindings */
    if (!_eglBindContext(ctx, dsurf, rsurf, &old_ctx, &old_dsurf, &old_rsurf))
