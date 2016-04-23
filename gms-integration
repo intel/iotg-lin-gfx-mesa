@@ -1,0 +1,13 @@
+###
+### GMS integration
+###
+upstream 79b0e13913b5189bb8629e80439fea746f99fe79
+	docs: update the sha256 checksums for 11.2.1
+topic/bxt-enablement 6a62cbc353d54af690d6be769e1c5c4a94b70420
+	i965/bxt: Add new APL (aka Broxton) device ID
+topic/vpg_ufo_patches d8030dfb186b6080ea8d09b7971279d74a061683
+	wayland/egl: Assigning window size to window surface size property
+topic/reusable_sync 1cfc1f1f0b0317a8d452d95c893489a99755bd31
+	egl: 'ret' shouldn't be used for pthread error-check
+topic/xcompile 751b9278c39229e6be9432745a42570006abc018
+	configure.ac: enable_asm=yes when x-compiling across same arch (v2)
