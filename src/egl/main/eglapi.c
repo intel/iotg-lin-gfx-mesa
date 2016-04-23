@@ -1547,6 +1547,14 @@ eglClientWaitSync(EGLDisplay dpy, EGLSync sync, EGLint flags, EGLTime timeout)
    if (s->SyncStatus == EGL_SIGNALED_KHR)
       RETURN_EGL_EVAL(disp, EGL_CONDITION_SATISFIED_KHR);
 
+   /* if sync type is EGL_SYNC_REUSABLE_KHR, dpy should be
+    * unlocked here to allow other threads also to be able to
+    * go into waiting state.
+    */
+
+   if (s->Type == EGL_SYNC_REUSABLE_KHR)
+      _eglUnlockDisplay(dpy);
+
    ret = drv->API.ClientWaitSyncKHR(drv, disp, s, flags, timeout);
 
    RETURN_EGL_EVAL(disp, ret);
