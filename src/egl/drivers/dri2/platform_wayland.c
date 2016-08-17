@@ -119,6 +119,13 @@ resize_callback(struct wl_egl_window *wl_win, void *data)
    (*dri2_dpy->flush->invalidate)(dri2_surf->dri_drawable);
 }
 
+static void
+destroy_window_callback(void *data)
+{
+   struct dri2_egl_surface *dri2_surf = data;
+   dri2_surf->wl_win = NULL;
+}
+
 /**
  * Called via eglCreateWindowSurface(), drv->API.CreateWindowSurface().
  */
@@ -160,6 +167,7 @@ dri2_wl_create_surface(_EGLDriver *drv, _EGLDisplay *disp,
 
    dri2_surf->wl_win->private = dri2_surf;
    dri2_surf->wl_win->resize_callback = resize_callback;
+   dri2_surf->wl_win->destroy_window_callback = destroy_window_callback;
 
    dri2_surf->base.Width = window->width;
    dri2_surf->base.Height = window->height;
@@ -258,8 +266,11 @@ dri2_wl_destroy_surface(_EGLDriver *drv, _EGLDisplay *disp, _EGLSurface *surf)
    if (dri2_surf->throttle_callback)
       wl_callback_destroy(dri2_surf->throttle_callback);
 
-   dri2_surf->wl_win->private = NULL;
-   dri2_surf->wl_win->resize_callback = NULL;
+   if (dri2_surf->wl_win) {
+      dri2_surf->wl_win->private = NULL;
+      dri2_surf->wl_win->resize_callback = NULL;
+      dri2_surf->wl_win->destroy_window_callback = NULL;
+   }
 
    free(surf);
 
