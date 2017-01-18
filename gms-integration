@@ -1,0 +1,7 @@
+###
+### GMS integration
+###
+upstream c8ece92ded9337b9ed60aa9568b41313025a1406
+	docs: add sha256 checksums for 13.0.3
+topic/vpg_ufo_patches a7636fdc53a8362fad154932e5fe3745b71748d9
+	gbm-dri: Duplicate image after checking its format.
