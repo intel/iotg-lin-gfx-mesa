@@ -90,6 +90,7 @@
 #include "c11/threads.h"
 #include "GL/mesa_glinterop.h"
 #include "eglcompiler.h"
+#include "util/list.h"
 
 #include "eglglobals.h"
 #include "eglcontext.h"
@@ -105,14 +106,16 @@
 /**
  * List item containing window related to surface
  */
-typedef struct
+struct window_list_item
 {
-    struct window_list_item *next;
+    struct list_head link;
+
     EGLNativeWindowType native_window;
     EGLSurface attached_surface;
-} window_list_item;
+    EGLDisplay attached_display;
+};
 
-window_list_item *window_surface_association_list = NULL;
+struct list_head window_list = {NULL, NULL};
 
 /*
  * Checks if a EGLWindow already have a created surface.
@@ -120,43 +123,50 @@ window_list_item *window_surface_association_list = NULL;
 static inline bool
 is_window_associated_with_surface(EGLNativeWindowType window)
 {
-   window_list_item *it = window_surface_association_list;
-   for (; it != NULL; it = (window_list_item*)it->next) {
-       if (it->native_window == window)
-          return true;
+   list_for_each_entry(struct window_list_item, item, &window_list, link) {
+      if (item->native_window == window) {
+         return true;
+      }
    }
 
    return false;
 }
 
 static inline void
-associate_window_with_surface_list(EGLNativeWindowType window, EGLSurface surface)
+associate_window_with_surface_list(EGLNativeWindowType window, EGLSurface surface,
+                                   EGLDisplay display)
 {
-   window_list_item *attach = calloc(1, sizeof(window_list_item));
+   struct window_list_item *attach = malloc(sizeof(struct window_list_item));
    assert(attach);
 
-   attach->next = (struct window_list_item*)window_surface_association_list;
    attach->native_window = window;
    attach->attached_surface = surface;
+   attach->attached_display = display;
 
-   window_surface_association_list = attach;
+   list_add(&attach->link, &window_list);
 }
 
 static inline void
 disassociate_window_with_surface_list(EGLSurface surface)
 {
-   window_list_item *it = window_surface_association_list, *last = NULL;
-   for (; it != NULL; it = (window_list_item*)it->next) {
-      if (it->attached_surface == surface) {
-         if (it == window_surface_association_list) {
-            window_surface_association_list = (window_list_item*)it->next;
-         } else {
-            last->next = it->next;
-         }
-         free(it);
-         return;
+   list_for_each_entry(struct window_list_item, item, &window_list, link) {
+     if (item->attached_surface == surface) {
+       list_del(&item->link);
+       free(item);
+       break;
+     }
+   }
+}
+
+static inline void
+disassociate_all_window_surface_links_by_display(EGLDisplay display)
+{
+   list_for_each_entry_safe(struct window_list_item, item, &window_list, link) {
+      if (item->attached_display == display) {
+
+         list_del(&item->link);
+         free(item);
       }
-      last = it;
    }
 }
 
@@ -667,6 +677,10 @@ eglInitialize(EGLDisplay dpy, EGLint *major, EGLint *minor)
       *minor = disp->Version % 10;
    }
 
+   if (!window_list.next || !window_list.prev) {
+      list_inithead(&window_list);
+   }
+
    RETURN_EGL_SUCCESS(disp, EGL_TRUE);
 }
 
@@ -683,6 +697,13 @@ eglTerminate(EGLDisplay dpy)
 
    if (disp->Initialized) {
       _EGLDriver *drv = disp->Driver;
+
+      /*
+       * Avoid mem leaks from window_surface_association_list
+       * when not on all window surfaces eglDestroySurface was called
+       * before calling eglTerminate.
+       */
+      disassociate_all_window_surface_links_by_display(dpy);
 
       drv->API.Terminate(drv, disp);
       /* do not reset disp->Driver */
@@ -950,7 +971,7 @@ eglCreateWindowSurface(EGLDisplay dpy, EGLConfig config,
                                                   attrib_list);
 
    if (window_surface)
-       associate_window_with_surface_list(window, window_surface);
+       associate_window_with_surface_list(window, window_surface, dpy);
 
    return window_surface;
 }
