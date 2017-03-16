@@ -1,0 +1,7 @@
+###
+### GMS integration
+###
+upstream 3b782f6bc405971e70a090be90a2899bb6d751fc
+	clover: Work around build failure with AltiVec.
+topic/vpg_ufo_patches f20763b130512199822e9fdebf21fad8337bca85
+	egl: Fix for memleak in window-surface association list v4
