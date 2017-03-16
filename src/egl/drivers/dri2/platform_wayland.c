@@ -44,6 +44,7 @@
 
 #include <wayland-client.h>
 #include "wayland-drm-client-protocol.h"
+#include "wayland-egl-priv.h"
 
 enum wl_drm_format_flags {
    HAS_ARGB8888 = 1,
@@ -168,8 +169,8 @@ dri2_wl_create_surface(_EGLDriver *drv, _EGLDisplay *disp,
    dri2_surf->wl_win->resize_callback = resize_callback;
    dri2_surf->wl_win->destroy_window_callback = destroy_window_callback;
 
-   dri2_surf->base.Width =  -1;
-   dri2_surf->base.Height = -1;
+   dri2_surf->base.Width = window->width;
+   dri2_surf->base.Height = window->height;
 
    config = dri2_get_dri_config(dri2_conf, EGL_WINDOW_BIT,
                                 dri2_surf->base.GLColorspace);

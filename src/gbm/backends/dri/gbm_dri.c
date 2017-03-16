@@ -678,8 +678,6 @@ gbm_dri_bo_import(struct gbm_device *gbm,
          return NULL;
       }
 
-      image = dri->image->dupImage(wb->driver_buffer, NULL);
-
       switch (wb->format) {
       case WL_DRM_FORMAT_XRGB8888:
          gbm_format = GBM_FORMAT_XRGB8888;
@@ -696,6 +694,8 @@ gbm_dri_bo_import(struct gbm_device *gbm,
       default:
          return NULL;
       }
+
+      image = dri->image->dupImage(wb->driver_buffer, NULL);
       break;
    }
 #endif
